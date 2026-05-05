@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Empresa {
+  id          String   @id @default(cuid())
+  cuit        String   @unique
+  razonSocial String
+  tipo        String
+  provincia   String
+  userId      String   @unique
+  createdAt   DateTime @default(now())
+  ofertas     Oferta[]
+}
+
+model Oferta {
+  id         String   @id @default(cuid())
+  empresaId  String
+  empresa    Empresa  @relation(fields: [empresaId], references: [id])
+  volumenTon Float
+  famePct    Float
+  precioARS  Float?
+  status     String   @default("ACTIVA")
+  createdAt  DateTime @default(now())
+}
+
+model PrecioSpot {
+  id      String   @id @default(cuid())
+  tipo    String
+  valor   Float
+  moneda  String   @default("ARS")
+  fuente  String
+  fecha   DateTime @default(now())
+
+  @@index([tipo, fecha])
+}
