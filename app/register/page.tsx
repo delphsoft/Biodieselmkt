@@ -1,19 +1,46 @@
 'use client'
 import { useState } from 'react'
+import { createClient } from '@/lib/supabase'
+import { empresaSchema, TIPOS_EMPRESA, type EmpresaFormInput } from '@/lib/validation'
 
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
-  const [form, setForm] = useState({
+  const [error, setError] = useState('')
+  const [form, setForm] = useState<EmpresaFormInput & { email: string }>({
     razonSocial: '', cuit: '', email: '', provincia: '', tipo: 'PLANTA'
   })
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setError('')
+
+    const { email, ...empresaData } = form
+    const parsed = empresaSchema.safeParse(empresaData)
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Datos inválidos')
+      return
+    }
+
     setLoading(true)
-    // Por ahora simula el envío — conectar con Supabase en Sprint 2
-    await new Promise(r => setTimeout(r, 1000))
-    setSent(true)
+    try {
+      const supabase = createClient()
+      // Los datos de la empresa viajan en user_metadata: en este paso todavía
+      // no hay sesión (recién se crea al confirmar el magic link), así que
+      // /auth/callback los toma de ahí para crear la fila Empresa definitiva
+      // (con validación Zod server-side en ensureEmpresaFromSession).
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: parsed.data,
+        },
+      })
+      if (otpError) throw otpError
+      setSent(true)
+    } catch {
+      setError('No pudimos enviar el email. Intentá de nuevo.')
+    }
     setLoading(false)
   }
 
@@ -21,6 +48,13 @@ export default function RegisterPage() {
     style: { width: '100%', padding: '10px 12px', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4, fontSize: 13, color: '#fff', background: 'rgba(255,255,255,0.06)', outline: 'none', boxSizing: 'border-box' as const },
     ...extra
   })
+
+  const TIPO_LABELS: Record<(typeof TIPOS_EMPRESA)[number], string> = {
+    PLANTA: '🏭 Planta productora',
+    PETROLERA: '⛽ Comprador / Petrolera',
+    EXPORTADORA: '🚢 Exportadora',
+    DISTRIBUIDOR: '🚛 Distribuidor',
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: '#0d1a14', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
@@ -35,9 +69,9 @@ export default function RegisterPage() {
         {sent ? (
           <div style={{ background: 'rgba(74,140,92,0.12)', border: '1px solid rgba(74,140,92,0.3)', borderRadius: 8, padding: 20, textAlign: 'center' }}>
             <div style={{ fontSize: 32, marginBottom: 10 }}>📧</div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 6 }}>¡Solicitud recibida!</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 6 }}>¡Revisá tu email!</div>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6 }}>
-              Revisamos tu información y te enviamos el acceso a <strong style={{ color: '#fff' }}>{form.email}</strong> en las próximas horas.
+              Enviamos un link de acceso a <strong style={{ color: '#fff' }}>{form.email}</strong>. Al confirmarlo creamos tu cuenta y entrás directo al dashboard.
             </div>
           </div>
         ) : (
@@ -46,24 +80,19 @@ export default function RegisterPage() {
             <div style={{ marginBottom: 14 }}>
               <label style={{ display: 'block', fontSize: 10, letterSpacing: '0.06em', color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>TIPO DE CUENTA</label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                {[
-                  { val: 'PLANTA', label: '🏭 Planta productora' },
-                  { val: 'PETROLERA', label: '⛽ Comprador / Petrolera' },
-                  { val: 'EXPORTADORA', label: '🚢 Exportadora' },
-                  { val: 'DISTRIBUIDOR', label: '🚛 Distribuidor' },
-                ].map(t => (
+                {TIPOS_EMPRESA.map(t => (
                   <button
-                    key={t.val}
+                    key={t}
                     type="button"
-                    onClick={() => setForm(f => ({ ...f, tipo: t.val }))}
+                    onClick={() => setForm(f => ({ ...f, tipo: t }))}
                     style={{
                       padding: '10px 8px', borderRadius: 6, fontSize: 12, cursor: 'pointer', textAlign: 'left' as const,
-                      background: form.tipo === t.val ? 'rgba(200,144,42,0.15)' : 'rgba(255,255,255,0.04)',
-                      border: `1px solid ${form.tipo === t.val ? '#c8902a' : 'rgba(255,255,255,0.1)'}`,
-                      color: form.tipo === t.val ? '#c8902a' : 'rgba(255,255,255,0.6)',
-                      fontWeight: form.tipo === t.val ? 600 : 400,
+                      background: form.tipo === t ? 'rgba(200,144,42,0.15)' : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${form.tipo === t ? '#c8902a' : 'rgba(255,255,255,0.1)'}`,
+                      color: form.tipo === t ? '#c8902a' : 'rgba(255,255,255,0.6)',
+                      fontWeight: form.tipo === t ? 600 : 400,
                     }}
-                  >{t.label}</button>
+                  >{TIPO_LABELS[t]}</button>
                 ))}
               </div>
             </div>
@@ -86,6 +115,10 @@ export default function RegisterPage() {
                 />
               </div>
             ))}
+
+            {error && (
+              <div style={{ fontSize: 12, color: '#ef5350', marginBottom: 12, fontFamily: 'monospace' }}>✗ {error}</div>
+            )}
 
             <button
               type="submit"

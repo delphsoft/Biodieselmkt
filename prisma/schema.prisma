@@ -12,11 +12,13 @@ model Empresa {
   id          String   @id @default(cuid())
   cuit        String   @unique
   razonSocial String
-  tipo        String
+  tipo        String // PLANTA | PETROLERA | EXPORTADORA | DISTRIBUIDOR
   provincia   String
   userId      String   @unique
   createdAt   DateTime @default(now())
-  ofertas     Oferta[]
+
+  ofertas             Oferta[]
+  contratosComprador  ContratoFosfa[] @relation("ContratosComoComprador")
 }
 
 model Oferta {
@@ -26,8 +28,23 @@ model Oferta {
   volumenTon Float
   famePct    Float
   precioARS  Float?
-  status     String   @default("ACTIVA")
+  status     String   @default("ACTIVA") // ACTIVA | EN_NEGOCIACION | CERRADA | CANCELADA
   createdAt  DateTime @default(now())
+
+  // Matching / compliance (Fase 0)
+  tipoMercado    String   @default("INTERNO") // INTERNO | EXPORT
+  lat            Float?
+  lng            Float?
+  isccActivo     Boolean  @default(false)
+  eudrVerificado Boolean  @default(false)
+
+  certificacion  CertificacionISCC?
+  ddsDocumento   DdsDocumento?
+  contratoFosfa  ContratoFosfa?
+  cartasDePorte  CartaDePorte[]
+
+  @@index([status])
+  @@index([empresaId])
 }
 
 model PrecioSpot {
@@ -39,4 +56,69 @@ model PrecioSpot {
   fecha   DateTime @default(now())
 
   @@index([tipo, fecha])
+}
+
+// Fase 3 — DDS / EUDR
+model DdsDocumento {
+  id               String   @id @default(cuid())
+  ofertaId         String   @unique
+  oferta           Oferta   @relation(fields: [ofertaId], references: [id])
+  geolocalizacion  Json // poligonos/puntos de origen de la materia prima
+  fechaProduccion  DateTime
+  paisOrigen       String
+  status           String   @default("PENDIENTE") // PENDIENTE | GENERADO | VERIFICADO
+  numeroReferencia String? // referencia TRACES si aplica — TODO: integrar con EU TRACES cuando esté disponible
+  pdfUrl           String?
+  createdAt        DateTime @default(now())
+}
+
+// Fase 4 — Contratos FOSFA
+model ContratoFosfa {
+  id                String    @id @default(cuid())
+  ofertaId          String    @unique
+  oferta            Oferta    @relation(fields: [ofertaId], references: [id])
+  numeroContrato    String    @unique
+  compradorId       String
+  comprador         Empresa   @relation("ContratosComoComprador", fields: [compradorId], references: [id])
+  incoterm          String // FOB, CIF, etc.
+  volumenTon        Float
+  precioAcordadoUSD Float
+  fechaEmbarque     DateTime?
+  status            String    @default("BORRADOR") // BORRADOR | FIRMADO | EN_TRANSITO | COMPLETADO
+  clausulas         Json? // terminos FOSFA estandar aplicados (checklist)
+  confirmadoProveedor Boolean @default(false)
+  confirmadoComprador Boolean @default(false)
+  createdAt         DateTime  @default(now())
+
+  cartaDePorte      CartaDePorte?
+}
+
+// Fase 5 — Carta de porte (ARCA/AFIP)
+// TODO: integrar con el webservice de ARCA para emisión oficial. Por ahora
+// el documento se genera como PDF descargable con datos cargados manualmente.
+model CartaDePorte {
+  id                 String         @id @default(cuid())
+  ofertaId           String? // envio domestico asociado directamente a la oferta
+  oferta             Oferta?        @relation(fields: [ofertaId], references: [id])
+  contratoFosfaId    String?        @unique // envio de exportacion asociado al contrato
+  contratoFosfa      ContratoFosfa? @relation(fields: [contratoFosfaId], references: [id])
+  cuitOrigen         String
+  cuitDestino        String
+  tipoCarga          String
+  pesoKg             Float
+  transportistaCuit  String
+  transportistaNombre String
+  status             String         @default("BORRADOR") // BORRADOR | EMITIDA
+  pdfUrl             String?
+  createdAt          DateTime       @default(now())
+}
+
+// Certificacion ISCC
+model CertificacionISCC {
+  id               String   @id @default(cuid())
+  ofertaId         String   @unique
+  oferta           Oferta   @relation(fields: [ofertaId], references: [id])
+  numeroCertificado String
+  fechaVencimiento DateTime
+  status           String   @default("ACTIVO") // ACTIVO | VENCIDO | SUSPENDIDO
 }

@@ -32,6 +32,7 @@ const NAV_ADMIN: NavItem[] = [
   { href: '/dashboard/admin/contratos',     icon: '📋', label: 'Contratos' },
   { href: '/dashboard/admin/eudr',          icon: '🌍', label: 'EUDR Monitor' },
   { href: '/dashboard/admin/transacciones', icon: '💰', label: 'Transacciones' },
+  { href: '/dashboard/admin/precios',       icon: '💲', label: 'Precios spot' },
 ]
 
 interface Props {

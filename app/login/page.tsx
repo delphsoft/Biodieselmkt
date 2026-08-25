@@ -1,7 +1,12 @@
 'use client'
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { createClient } from '@/lib/supabase'
 
-export default function LoginPage() {
+function LoginForm() {
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get('redirectTo')
+
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
@@ -13,10 +18,15 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
     try {
-      // Conectar con Supabase en Sprint 2 cuando estén las env vars
-      // const supabase = createClient()
-      // await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: `${window.location.origin}/dashboard` } })
-      await new Promise(r => setTimeout(r, 800))
+      const supabase = createClient()
+      const callbackUrl = new URL('/auth/callback', window.location.origin)
+      if (redirectTo) callbackUrl.searchParams.set('redirectTo', redirectTo)
+
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: callbackUrl.toString() },
+      })
+      if (otpError) throw otpError
       setSent(true)
     } catch {
       setError('Error al enviar. Intentá de nuevo.')
@@ -75,24 +85,17 @@ export default function LoginPage() {
             <p style={{ textAlign: 'center', fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 16 }}>
               ¿No tenés cuenta? <a href="/register" style={{ color: '#c8902a', textDecoration: 'none' }}>Registrarse</a>
             </p>
-
-            <div style={{ marginTop: 20, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.07)' }}>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.05em', marginBottom: 6 }}>DEMO — ACCESO DIRECTO</div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
-                {[
-                  { label: '🏭 Proveedor', href: '/dashboard/proveedor' },
-                  { label: '⛽ Comprador', href: '/dashboard/comprador' },
-                  { label: '⚙️ Admin', href: '/dashboard/admin' },
-                ].map(d => (
-                  <a key={d.href} href={d.href} style={{ fontSize: 11, padding: '5px 10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>
-                    {d.label}
-                  </a>
-                ))}
-              </div>
-            </div>
           </form>
         )}
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   )
 }

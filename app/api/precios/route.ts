@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
 
-const PRECIOS = [
-  { tipo: 'BIODIESEL_INTERNO', valor: 842500, moneda: 'ARS', fuente: 'SEC_ENERGIA' },
-  { tipo: 'BIODIESEL_FOB',     valor: 1247,   moneda: 'USD', fuente: 'BOLSA_ROSARIO' },
-  { tipo: 'SOJA_ACEITE',       valor: 923,    moneda: 'USD', fuente: 'BOLSA_ROSARIO' },
-  { tipo: 'GASOIL_REF',        valor: 1180000, moneda: 'ARS', fuente: 'SEC_ENERGIA' },
-]
-
+// TODO: no hay confirmación de una fuente pública con API estable para
+// Bolsa Rosario / Sec. Energía. Hasta que se defina una integración
+// automatizada, estos valores se cargan a mano desde /dashboard/admin/precios
+// — no son "en vivo", son el último valor que un admin publicó.
 export async function GET() {
-  return NextResponse.json({ ok: true, data: PRECIOS })
+  const tipos = ['BIODIESEL_INTERNO', 'BIODIESEL_FOB', 'SOJA_ACEITE', 'GASOIL_REF']
+
+  const ultimos = await Promise.all(
+    tipos.map(tipo => prisma.precioSpot.findFirst({ where: { tipo }, orderBy: { fecha: 'desc' } }))
+  )
+
+  return NextResponse.json({ ok: true, data: ultimos.filter(Boolean) })
 }
